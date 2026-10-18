@@ -1,24 +1,27 @@
 package com.xaiver.cobbleballworks.registry
 
 import com.xaiver.cobbleballworks.CobbleBallworks
-import com.xaiver.cobbleballworks.block.BallAnvilBlockEntity
+import com.xaiver.cobbleballworks.block.entity.BallAnvilBlockEntity
+import com.xaiver.cobbleballworks.block.entity.MechanicalAnvilBlockEntity
+import net.minecraft.core.Registry
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.world.level.block.entity.BlockEntityType
-import net.minecraftforge.eventbus.api.IEventBus
-import net.minecraftforge.registries.DeferredRegister
-import net.minecraftforge.registries.ForgeRegistries
-import net.minecraftforge.registries.RegistryObject
 
 object ModBlockEntities {
-    val BLOCK_ENTITIES: DeferredRegister<BlockEntityType<*>> =
-        DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, CobbleBallworks.MOD_ID)
+    // No data fixer type (null), like every modded block entity.
+    @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+    val BALL_ANVIL: BlockEntityType<BallAnvilBlockEntity> = Registry.register(
+        BuiltInRegistries.BLOCK_ENTITY_TYPE,
+        CobbleBallworks.id("ball_anvil"),
+        BlockEntityType.Builder.of(::BallAnvilBlockEntity, ModBlocks.BALL_ANVIL).build(null),
+    )
 
-    val BALL_ANVIL: RegistryObject<BlockEntityType<BallAnvilBlockEntity>> =
-        BLOCK_ENTITIES.register("ball_anvil") {
-            @Suppress("DEPRECATION")
-            BlockEntityType.Builder.of(::BallAnvilBlockEntity, ModBlocks.BALL_ANVIL.get()).build(null)
-        }
+    @Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
+    val MECHANICAL_ANVIL: BlockEntityType<MechanicalAnvilBlockEntity> = Registry.register(
+        BuiltInRegistries.BLOCK_ENTITY_TYPE,
+        CobbleBallworks.id("mechanical_anvil"),
+        BlockEntityType.Builder.of(::MechanicalAnvilBlockEntity, ModBlocks.MECHANICAL_ANVIL).build(null),
+    )
 
-    fun register(bus: IEventBus) {
-        BLOCK_ENTITIES.register(bus)
-    }
+    fun init() = Unit
 }

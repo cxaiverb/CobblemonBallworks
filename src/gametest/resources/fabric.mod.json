@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "cobbleballworks-gametest",
+  "version": "0.0.0",
+  "name": "Cobblemon Ballworks - gametests (dev only)",
+  "description": "Headless Fabric gametests for Cobblemon Ballworks. Never shipped.",
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-gametest": [
+      "com.xaiver.cobbleballworks.gametest.CobbleBallworksGameTest",
+      "com.xaiver.cobbleballworks.gametest.RegistryGameTest",
+      "com.xaiver.cobbleballworks.gametest.DataIntegrityGameTest",
+      "com.xaiver.cobbleballworks.gametest.RecipeGameTest",
+      "com.xaiver.cobbleballworks.gametest.AnvilGameTest",
+      "com.xaiver.cobbleballworks.gametest.MechanicalAnvilGameTest"
+    ]
+  },
+  "depends": {
+    "cobbleballworks": "*",
+    "fabric-gametest-api-v1": "*"
+  }
+}

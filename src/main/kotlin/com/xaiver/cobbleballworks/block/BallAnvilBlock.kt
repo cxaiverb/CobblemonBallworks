@@ -1,141 +1,114 @@
 package com.xaiver.cobbleballworks.block
 
-import com.xaiver.cobbleballworks.item.BallHammerItem
+import com.mojang.serialization.MapCodec
+import com.xaiver.cobbleballworks.block.entity.BallAnvilBlockEntity
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
-import net.minecraft.world.Containers
+import net.minecraft.sounds.SoundEvents
+import net.minecraft.sounds.SoundSource
 import net.minecraft.world.InteractionHand
-import net.minecraft.world.InteractionResult
+import net.minecraft.world.ItemInteractionResult
 import net.minecraft.world.entity.player.Player
+import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.context.BlockPlaceContext
+import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.BaseEntityBlock
+import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.HorizontalDirectionalBlock
 import net.minecraft.world.level.block.Mirror
 import net.minecraft.world.level.block.RenderShape
 import net.minecraft.world.level.block.Rotation
 import net.minecraft.world.level.block.entity.BlockEntity
-import net.minecraft.world.level.block.state.BlockBehaviour
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.block.state.StateDefinition
-import net.minecraft.world.level.block.state.properties.DirectionProperty
+import net.minecraft.world.level.pathfinder.PathComputationType
 import net.minecraft.world.phys.BlockHitResult
+import net.minecraft.world.phys.shapes.CollisionContext
+import net.minecraft.world.phys.shapes.Shapes
+import net.minecraft.world.phys.shapes.VoxelShape
 
 /**
- * Right-click interaction dispatcher for the Ball Anvil. All state lives on
- * [BallAnvilBlockEntity]; this class only decides which helper to call and takes care of
- * side effects that need the player's inventory or the block-break path.
- *
- * `use` is the 1.20.1 six-arg signature. [FACING] tracks horizontal placement so the
- * imported Pixelmon-style model renders toward the player — matches the four-variant
- * blockstate shipped in `assets/cobbleballworks/blockstates/ball_anvil.json`.
+ * The Poké Ball anvil (Pixelmon's "Anvil"): right click with a disc puts it on top, right click
+ * with the main hand takes the piece back, and holding left click with a hammer hammers it (see
+ * AnvilStrikes). Any other tool, or the bare hand, breaks it and drops the piece; only an iron
+ * pickaxe or better drops the anvil itself.
  */
-class BallAnvilBlock(properties: BlockBehaviour.Properties) : BaseEntityBlock(properties) {
+class BallAnvilBlock(properties: Properties) : BaseEntityBlock(properties) {
 
     init {
         registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH))
     }
 
-    override fun createBlockStateDefinition(builder: StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState>) {
+    override fun codec(): MapCodec<out BaseEntityBlock> = simpleCodec(::BallAnvilBlock)
+
+    override fun createBlockStateDefinition(builder: StateDefinition.Builder<Block, BlockState>) {
         builder.add(FACING)
     }
 
-    override fun getStateForPlacement(ctx: BlockPlaceContext): BlockState? =
-        defaultBlockState().setValue(FACING, ctx.horizontalDirection.opposite)
+    override fun getStateForPlacement(context: BlockPlaceContext): BlockState =
+        defaultBlockState().setValue(FACING, context.horizontalDirection.opposite)
 
     override fun rotate(state: BlockState, rotation: Rotation): BlockState =
         state.setValue(FACING, rotation.rotate(state.getValue(FACING)))
 
-    override fun mirror(state: BlockState, mirror: Mirror): BlockState {
-        // Inlined instead of calling `state.rotate(...)` — that BlockState helper is
-        // deprecated as an internal shortcut; this form does the same work without
-        // touching the deprecated API.
-        val derivedRotation = mirror.getRotation(state.getValue(FACING))
-        return state.setValue(FACING, derivedRotation.rotate(state.getValue(FACING)))
-    }
-
-    override fun newBlockEntity(pos: BlockPos, state: BlockState): BlockEntity =
-        BallAnvilBlockEntity(pos, state)
+    override fun mirror(state: BlockState, mirror: Mirror): BlockState =
+        state.rotate(mirror.getRotation(state.getValue(FACING)))
 
     override fun getRenderShape(state: BlockState): RenderShape = RenderShape.MODEL
 
-    override fun use(
+    override fun getShape(state: BlockState, level: BlockGetter, pos: BlockPos, context: CollisionContext): VoxelShape =
+        if (state.getValue(FACING).axis == Direction.Axis.Z) SHAPE_LONG_X else SHAPE_LONG_Z
+
+    override fun isPathfindable(state: BlockState, type: PathComputationType): Boolean = false
+
+    override fun newBlockEntity(pos: BlockPos, state: BlockState): BlockEntity = BallAnvilBlockEntity(pos, state)
+
+    override fun useItemOn(
+        stack: ItemStack,
         state: BlockState,
         level: Level,
         pos: BlockPos,
         player: Player,
         hand: InteractionHand,
-        hit: BlockHitResult
-    ): InteractionResult {
-        val be = level.getBlockEntity(pos) as? BallAnvilBlockEntity
-            ?: return InteractionResult.PASS
-        val held = player.getItemInHand(hand)
-
-        // 1) Holding the hammer -> try to advance progress on whatever is loaded.
-        if (held.item is BallHammerItem) {
-            if (!be.canHammer()) {
-                return InteractionResult.PASS
-            }
+        hit: BlockHitResult,
+    ): ItemInteractionResult {
+        val anvil = level.getBlockEntity(pos) as? BallAnvilBlockEntity
+            ?: return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
+        if (!anvil.isEmpty) {
+            // Any right click with the main hand takes the piece back, whatever is held (no swap).
+            if (hand != InteractionHand.MAIN_HAND) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
             if (!level.isClientSide) {
-                be.applyHammer(player, hand, held)
+                player.inventory.placeItemBackInInventory(anvil.take())
+                level.playSound(null, pos, SoundEvents.WOODEN_BUTTON_CLICK_OFF, SoundSource.BLOCKS, 0.1f, 3.0f)
             }
-            return InteractionResult.sidedSuccess(level.isClientSide)
+            return ItemInteractionResult.sidedSuccess(level.isClientSide)
         }
-
-        // 2) Holding a supported blank on an empty anvil -> load it.
-        if (be.canInsertWorkpiece(held)) {
-            if (!level.isClientSide) {
-                if (be.insertWorkpiece(held) && !player.abilities.instabuild) {
-                    held.shrink(1)
-                }
-            }
-            return InteractionResult.sidedSuccess(level.isClientSide)
+        if (!anvil.canPlace(stack)) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
+        if (!level.isClientSide) {
+            anvil.place(stack)
+            stack.consume(1, player)
         }
-
-        // 3) Empty hand + something stored -> take it out.
-        if (held.isEmpty && !be.storedItem.isEmpty) {
-            val canTake = be.isFinished || player.isShiftKeyDown
-            if (canTake) {
-                if (!level.isClientSide) {
-                    val taken = be.takeWorkpiece()
-                    if (!taken.isEmpty && !player.inventory.add(taken)) {
-                        player.drop(taken, false)
-                    }
-                }
-                return InteractionResult.sidedSuccess(level.isClientSide)
-            }
-        }
-
-        return InteractionResult.PASS
+        return ItemInteractionResult.sidedSuccess(level.isClientSide)
     }
 
-    // `BlockBehaviour.onRemove` is marked @Deprecated by Mojang as an internal-use
-    // override hook — there is no non-deprecated replacement in Forge 1.20.1, and every
-    // block-entity-bearing block has to override it to drop its contents on break. The
-    // suppression silences the Kotlin warning on both the override and the required
-    // `super.onRemove(...)` call inside.
-    @Suppress("DEPRECATION")
-    override fun onRemove(
-        state: BlockState,
-        level: Level,
-        pos: BlockPos,
-        newState: BlockState,
-        movedByPiston: Boolean
-    ) {
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun onRemove(state: BlockState, level: Level, pos: BlockPos, newState: BlockState, movedByPiston: Boolean) {
         if (!state.`is`(newState.block)) {
-            val be = level.getBlockEntity(pos)
-            if (be is BallAnvilBlockEntity && !be.storedItem.isEmpty) {
-                Containers.dropItemStack(
-                    level,
-                    pos.x.toDouble(), pos.y.toDouble(), pos.z.toDouble(),
-                    be.storedItem
-                )
-            }
+            val anvil = level.getBlockEntity(pos) as? BallAnvilBlockEntity
+            if (anvil != null && !anvil.isEmpty) popResource(level, pos, anvil.take())
         }
         super.onRemove(state, level, pos, newState, movedByPiston)
     }
 
     companion object {
-        val FACING: DirectionProperty = HorizontalDirectionalBlock.FACING
+        val FACING = HorizontalDirectionalBlock.FACING
+
+        /** Facing north/south: horn and heel along X. Matches models/block/ball_anvil.json. */
+        private val SHAPE_LONG_X: VoxelShape = Shapes.or(box(3.0, 0.0, 4.0, 13.0, 7.0, 12.0), box(0.0, 7.0, 4.5, 16.0, 11.0, 11.5))
+        private val SHAPE_LONG_Z: VoxelShape = Shapes.or(box(4.0, 0.0, 3.0, 12.0, 7.0, 13.0), box(4.5, 7.0, 0.0, 11.5, 11.0, 16.0))
+
+        /** Height of the anvil's working face, in pixels; the renderer puts the piece there. */
+        const val TOP_Y = 11.0
     }
 }

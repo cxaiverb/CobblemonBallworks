@@ -1,79 +1,50 @@
 package com.xaiver.cobbleballworks.registry
 
 import com.xaiver.cobbleballworks.CobbleBallworks
-import com.xaiver.cobbleballworks.item.BallHammerItem
-import com.xaiver.cobbleballworks.item.BallMoldItem
+import com.xaiver.cobbleballworks.content.ApricornColor
+import com.xaiver.cobbleballworks.content.ForgeBall
+import com.xaiver.cobbleballworks.content.HammerMaterial
+import com.xaiver.cobbleballworks.item.HammerItem
+import net.minecraft.core.Registry
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.world.item.Item
-import net.minecraftforge.eventbus.api.IEventBus
-import net.minecraftforge.registries.DeferredRegister
-import net.minecraftforge.registries.ForgeRegistries
-import net.minecraftforge.registries.RegistryObject
+import java.util.EnumMap
 
 object ModItems {
-    val ITEMS: DeferredRegister<Item> =
-        DeferredRegister.create(ForgeRegistries.ITEMS, CobbleBallworks.MOD_ID)
+    /** Furnace: raw Cobblemon apricorn -> cooked apricorn, the ingredient of every disc. */
+    val COOKED_APRICORNS: Map<ApricornColor, Item> =
+        ApricornColor.entries.associateWithTo(EnumMap(ApricornColor::class.java)) { register(it.cookedPath, Item(Item.Properties())) }
 
-    private fun plainItem() = Item.Properties()
+    /** Iron Disc (id inherited from the original Ballworks): 3 iron ingots in a row -> 5. */
+    val IRON_DISC: Item = register("base_blank", Item(Item.Properties()))
 
-    // Shared parts
-    val BASE_BLANK: RegistryObject<Item> =
-        ITEMS.register("base_blank") { Item(plainItem()) }
+    /** Iron Base: an iron disc hammered on the anvil. */
+    val IRON_BASE: Item = register("pokeball_base", Item(Item.Properties()))
 
-    val POKEBALL_BASE: RegistryObject<Item> =
-        ITEMS.register("pokeball_base") { Item(plainItem()) }
+    val DISCS: Map<ForgeBall, Item> =
+        ForgeBall.entries.associateWithTo(EnumMap(ForgeBall::class.java)) { register(it.discPath, Item(Item.Properties())) }
 
-    // Reusable industrial mold — made at a Tinkers' Construct casting table (not
-    // craftable), used as the "extra/mold" input on Mekanism: More Machine's
-    // Stamping Factory. Stack size 1 so one mold occupies one slot cleanly; the
-    // crafting-remainder override keeps it from being consumed by processors
-    // that respect that hook.
-    val BALL_MOLD: RegistryObject<Item> =
-        ITEMS.register("ball_mold") { BallMoldItem(plainItem().stacksTo(1)) }
+    val LIDS: Map<ForgeBall, Item> =
+        ForgeBall.entries.associateWithTo(EnumMap(ForgeBall::class.java)) { register(it.lidPath, Item(Item.Properties())) }
 
-    // Tiered hammers. Wood < stone < iron < gold < diamond is the primary progression;
-    // everything off that track (aluminium, gems, evolution stones) matches iron so the
-    // primary path has clear stakes. Every entry is a BallHammerItem, so they all return
-    // to the crafting grid with +1 damage and all pass the anvil's `is BallHammerItem`
-    // check — tier only affects how many hammerings you get out of one.
-    private const val IRON_DURABILITY = 250
+    val HAMMERS: Map<HammerMaterial, HammerItem> =
+        HammerMaterial.entries.associateWithTo(EnumMap(HammerMaterial::class.java)) { register(it.itemPath, HammerItem(it)) }
 
-    private val HAMMER_DURABILITY: Map<String, Int> = mapOf(
-        "wood" to 60,
-        "stone" to 132,
-        "iron" to IRON_DURABILITY,
-        "gold" to 500,
-        "diamond" to 1024,
-        "aluminium" to IRON_DURABILITY,
-        "amethyst" to IRON_DURABILITY,
-        "ruby" to IRON_DURABILITY,
-        "sapphire" to IRON_DURABILITY,
-        "dawn_stone" to IRON_DURABILITY,
-        "dusk_stone" to IRON_DURABILITY,
-        "fire_stone" to IRON_DURABILITY,
-        "leaf_stone" to IRON_DURABILITY,
-        "moon_stone" to IRON_DURABILITY,
-        "sun_stone" to IRON_DURABILITY,
-        "thunder_stone" to IRON_DURABILITY,
-        "water_stone" to IRON_DURABILITY,
-    )
+    fun hammer(material: HammerMaterial): HammerItem = HAMMERS.getValue(material)
 
-    val HAMMERS: Map<String, RegistryObject<Item>> =
-        HAMMER_DURABILITY.mapValues { (id, durability) ->
-            ITEMS.register("${id}_hammer") { BallHammerItem(plainItem().durability(durability)) }
-        }
-
-    // Per-ball parts, driven by BallRegistry so adding a ball is a one-line change.
-    val LID_BLANKS: Map<String, RegistryObject<Item>> =
-        BallRegistry.ALL.associateWith { id ->
-            ITEMS.register("${id}_lid_blank") { Item(plainItem()) }
-        }
-
-    val LIDS: Map<String, RegistryObject<Item>> =
-        BallRegistry.ALL.associateWith { id ->
-            ITEMS.register("${id}_lid") { Item(plainItem()) }
-        }
-
-    fun register(bus: IEventBus) {
-        ITEMS.register(bus)
+    /** Every item of the mod, in creative tab order. */
+    fun all(): List<Item> = buildList {
+        addAll(HAMMERS.values)
+        addAll(COOKED_APRICORNS.values)
+        add(IRON_DISC)
+        add(IRON_BASE)
+        addAll(DISCS.values)
+        addAll(LIDS.values)
     }
+
+    private fun <T : Item> register(path: String, item: T): T =
+        Registry.register(BuiltInRegistries.ITEM, CobbleBallworks.id(path), item)
+
+    /** Forces the object (and so the registration above) to load. */
+    fun init() = Unit
 }

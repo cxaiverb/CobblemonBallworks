@@ -1,0 +1,10 @@
+{
+  "type": "cobbleballworks:anvil",
+  "ingredient": {
+    "item": "cobbleballworks:repeat_lid_blank"
+  },
+  "result": {
+    "id": "cobbleballworks:repeat_lid"
+  },
+  "force": 10
+}

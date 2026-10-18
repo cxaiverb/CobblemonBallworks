@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "group": "ball_bases",
+  "pattern": [
+    "iii"
+  ],
+  "key": {
+    "i": {
+      "tag": "c:ingots/iron"
+    }
+  },
+  "result": {
+    "id": "cobbleballworks:base_blank",
+    "count": 5
+  }
+}
